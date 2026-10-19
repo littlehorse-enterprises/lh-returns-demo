@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#161c1b">
+  <title>Your orders · Outer Rim Outfitters</title>
+  <link rel="preload" href="/shop/manrope.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/shop/store.css">
+  <script src="/shop/store.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="announcement"><span>DEPENDABLE GEAR. QUESTIONABLE DESTINATIONS.</span><span>Shipping across the galaxy since 1977.</span></div>
+  <header class="header">
+    <a class="brand" href="/" aria-label="Outer Rim Outfitters home"><span class="brand-mark" aria-hidden="true">✳</span><span>OUTER RIM<small>OUTFITTERS &amp; SUPPLY</small></span></a>
+    <nav aria-label="Account"><a href="/" aria-current="page">Your orders</a><span class="account"><span class="avatar" aria-hidden="true">LS</span><span>Luke S.<small>Demo account</small></span></span></nav>
+  </header>
+  <main id="main" tabindex="-1">
+    <div id="orders-view">
+      <div class="breadcrumb">ACCOUNT SERVICES <span aria-hidden="true">/</span> ORDERS &amp; REPLACEMENTS</div>
+      <div class="page-heading"><div><p class="eyebrow">A LITTLE HELP, FROM THIS GALAXY.</p><h1>Even Jedi need<br><em>customer support.</em></h1><p>Your gear should work. If it doesn’t, we’ll help make it right.</p></div><div class="service-stamp"><span aria-hidden="true">↗</span><strong>Good gear.<br>Better backup.</strong><span>THE OUTER RIM PROMISE</span></div></div>
+      <div class="section-heading"><h2>Your orders</h2><span class="order-count" id="order-count">Checking orders…</span></div>
+      <p id="orders-error" class="error" role="alert" hidden></p>
+      <div id="orders" class="orders" aria-live="polite"><p class="loading">Loading your orders…</p></div>
+      <aside class="help-strip"><span class="help-icon" aria-hidden="true">↺</span><div><h2>Same item. A fresh start.</h2><p>Choose an order to request a replacement. We’ll check eligibility and keep you updated.</p></div><span class="help-tag">NO MIND TRICKS REQUIRED</span></aside>
+    </div>
+    <section id="tracking-view" hidden aria-labelledby="tracking-title">
+      <a href="/" class="back-link">← Back to your orders</a>
+      <div class="tracking-layout">
+        <div class="tracking-main"><div id="status-icon" class="status-icon" aria-hidden="true">↺</div><p class="eyebrow">REPLACEMENT SUPPORT</p><h1 id="tracking-title">We’ve received your request</h1><p id="tracking-copy" class="tracking-copy">We’re checking the details. Come back here for updates.</p><p id="tracking-error" class="error" role="alert" hidden></p><button id="retry-status" class="secondary small" hidden>Check again</button><ol id="progress" class="progress" aria-label="Exchange progress"></ol><div id="tracking-note" class="tracking-note"></div></div>
+        <aside class="summary" aria-label="Exchange item"><div class="summary-image"><img id="tracking-image" src="/shop/jedi-saber.svg" alt="" width="480" height="360"></div><div class="summary-body"><p class="eyebrow">YOUR ITEM</p><h2 id="tracking-item"></h2><p id="tracking-order" class="muted"></p><hr><div class="summary-row"><span>Original item value</span><strong id="replacement-price"></strong></div><div class="summary-row"><span>Replacement shipping</span><span>Free if approved</span></div><div class="summary-row total"><span>Additional payment</span><strong>$0.00</strong></div><p class="summary-footnote">Replacement eligibility is checked before anything is sent.</p></div></aside>
+      </div>
+      <details class="demo-details"><summary><span>Behind the exchange</span><span class="details-label">DEVELOPER DEMO ↗</span></summary><div class="demo-intro"><div><p class="eyebrow">THE AGENT INVESTIGATES. THE WORKFLOW DECIDES.</p><h2>A recommendation isn’t a replacement.</h2><p>The model reads three tools. Java applies trusted policy. Kafka carries the customer request and delivery confirmation. Open the native Dashboard to inspect execution.</p></div><a id="workflow-link" class="secondary" target="_blank" rel="noopener">Open LittleHorse run ↗</a></div><dl class="evidence-grid"><div><dt>01 / BUSINESS INPUT</dt><dd id="evidence-ingress">Awaiting Kafka acknowledgement</dd></div><div><dt>02 / AGENT READS</dt><dd id="evidence-tools">No tool reads recorded yet</dd></div><div><dt>03 / POLICY</dt><dd id="evidence-policy">Not evaluated</dd></div><div><dt>04 / BUSINESS EFFECT</dt><dd id="evidence-effect">No replacement receipt</dd></div><div><dt>05 / DELIVERY EVENT</dt><dd id="evidence-delivery">Not confirmed</dd></div><div><dt>06 / NATIVE WORKFLOW</dt><dd id="evidence-native">Checking availability</dd></div></dl><p class="simulation-note">Real model, read-only MCP tools, Kafka and LittleHorse execution. Synthetic orders, local review callback and simulated fulfillment. No real purchase or shipment occurs.</p></details>
+    </section>
+  </main>
+  <footer><a class="footer-brand" href="/">OUTER RIM OUTFITTERS</a><span>Unofficial Star Wars fan demo · Synthetic orders &amp; simulated fulfillment</span><a id="dashboard-link" target="_blank" rel="noopener">LittleHorse Dashboard ↗</a></footer>
+  <dialog id="exchange-dialog" aria-labelledby="exchange-title">
+    <div class="dialog-heading"><div><p class="eyebrow">LET’S MAKE IT RIGHT</p><h2 id="exchange-title">Request a replacement.</h2></div><button id="close-dialog" class="icon-button" aria-label="Close exchange request">×</button></div>
+    <form id="exchange-form">
+      <div class="selected-item"><img id="form-image" src="/shop/jedi-saber.svg" alt="" width="96" height="96"><div><strong id="form-item"></strong><p id="form-order" class="muted"></p><span>Quantity: 1</span></div></div>
+      <label for="reason">What went wrong?</label>
+      <select id="reason" name="reason" required><option value="" disabled selected>Select a reason</option><option value="damaged">Damaged in transit</option><option value="not-working">Won’t ignite or work</option><option value="wrong-color">Wrong blade color</option><option value="sand">Sand in the hilt. It gets everywhere.</option><option value="other">Something else</option></select>
+      <label for="message">Anything else we should know? <span class="muted optional">(optional)</span></label>
+      <textarea id="message" name="message" autocomplete="off" maxlength="1000" rows="3" placeholder="For example, the hilt was cracked when I opened the box…"></textarea>
+      <fieldset class="resolution"><legend>Your preferred resolution</legend><label><input type="radio" name="resolution" value="replacement" checked><span><strong>Send the same item again</strong><small>No extra charge if approved.</small></span><span class="free">$0.00</span></label></fieldset>
+      <p id="form-error" class="error" role="alert" hidden></p>
+      <div class="form-actions"><button type="button" id="cancel-exchange" class="secondary">Cancel</button><button type="submit" id="submit-exchange" class="primary">Request replacement ↗</button></div>
+      <p class="form-disclaimer">We’ll check eligibility before arranging a replacement.</p>
+    </form>
+  </dialog>
+  <div id="announcer" class="sr-only" aria-live="polite" role="status"></div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+FROM confluentinc/cp-kafka-connect:8.1.2@sha256:5d96bfeb4c08a5c12e4a149fd209eed3708c5849e6caf2bcdbed19b78c481331
+USER root
+# Published shaded plugin includes its dependencies. Verify the release asset, never build main.
+ADD https://github.com/littlehorse-enterprises/lh-kafka-connect/releases/download/v1.3.0/lh-kafka-connect-1.3.0.jar /tmp/lh-kafka-connect-1.3.0.jar
+RUN echo '8cb63533dfe9fa76ef81d1947318d8656232ecc30f8d619ce9836fc8d7f050e8  /tmp/lh-kafka-connect-1.3.0.jar' | sha256sum -c - \
+    && mkdir -p /usr/share/confluent-hub-components/lh-kafka-connect/lib \
+    && mv /tmp/lh-kafka-connect-1.3.0.jar /usr/share/confluent-hub-components/lh-kafka-connect/lib/ \
+    && chown -R appuser:appuser /usr/share/confluent-hub-components/lh-kafka-connect
+USER appuser

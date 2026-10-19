@@ -1,0 +1,11 @@
+.gradle/
+build/
+data/
+work/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+PLAN.md
+CONTRACTS.md

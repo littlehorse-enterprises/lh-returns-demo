@@ -1,0 +1,17 @@
+{
+  "connector.class": "io.littlehorse.connect.WfRunSinkConnector",
+  "tasks.max": "1",
+  "topics": "customer-requests",
+  "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter.schemas.enable": "false",
+  "lhc.api.host": "littlehorse",
+  "lhc.api.port": "2024",
+  "lhc.api.protocol": "PLAINTEXT",
+  "lhc.tenant.id": "default",
+  "wf.spec.name": "returns-resolution",
+  "auto.idempotency.key.enabled": "false",
+  "consumer.override.auto.offset.reset": "earliest",
+  "transient.errors.tolerance": "transients",
+  "errors.tolerance": "none"
+}
