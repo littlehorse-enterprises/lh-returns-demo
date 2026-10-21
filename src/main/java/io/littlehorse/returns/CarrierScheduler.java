@@ -44,9 +44,17 @@ public final class CarrierScheduler implements AutoCloseable {
   public void tick(long now) {
     RuntimeException failure = null;
     for (Map<String, Object> c : store.list()) {
+      if ("ESCALATED".equals(c.get("status")) && c.get("replacement") != null
+          && Boolean.TRUE.equals(c.get("carrierPublished")) && c.get("lateDelivery") == null) {
+        store.update(String.valueOf(c.get("requestId")), current -> {
+          CaseStore.recordLateDelivery(current);
+          return current;
+        });
+      }
       if (c.get("carrierDueAt") instanceof Number due && due.longValue() <= now
           && !Boolean.TRUE.equals(c.get("carrierPublished"))
-          && !java.util.Set.of("ESCALATED", "REJECTED").contains(c.get("status"))) {
+          && c.get("replacement") != null
+          && !"REJECTED".equals(c.get("status"))) {
         String id = String.valueOf(c.get("requestId"));
         try {
           publisher.publish("fulfillment-events", id, "true");
@@ -56,6 +64,7 @@ public final class CarrierScheduler implements AutoCloseable {
               CaseStore.event(current, "CARRIER_EVENT_PUBLISHED",
                   "Simulated carrier delivered event acknowledged by Kafka.");
             }
+            CaseStore.recordLateDelivery(current);
             return current;
           });
         } catch (Exception e) {

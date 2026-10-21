@@ -219,12 +219,13 @@ See [infrastructure details](infrastructure/README.md) for startup ordering, top
 | Command | What it checks |
 | --- | --- |
 | `./scripts/demo.sh normal` | Automatic replacement, tool reads, receipt and native completion. |
-| `./scripts/demo.sh review` | High-value request waits for approval, then completes. |
+| `./scripts/demo.sh information` | A factual answer is stored and visible, with no replacement. |
+| `./scripts/demo.sh review` | High-value request remains pending through request replay, then completes after approval. |
 | `./scripts/demo.sh rejection` | Rejection issues no replacement. |
 | `./scripts/demo.sh recovery` | Crash after persistence, retry and receipt reuse. |
 | `./scripts/demo.sh duplicates` | Replayed records reach both sink offsets; the same run retains one effect. |
-| `./scripts/demo.sh carrier-restart` | A pending outbox survives an independent carrier restart. |
-| `./scripts/demo.sh timeouts` | Review and delivery deadlines escalate safely; normal waits and the carrier are restored. |
+| `./scripts/demo.sh carrier-restart` | Request replay creates no early delivery; a pending outbox survives carrier restart. |
+| `./scripts/demo.sh timeouts` | Deadlines escalate; late carrier confirmation retains the failed native outcome and one receipt. |
 | `./scripts/smoke.sh` | All of the above. |
 
 These scenarios use real infrastructure and model calls. Recovery restarts the owned app; carrier and timeout checks stop/start the owned carrier. Timeout checks temporarily register shorter event deadlines. Run them sequentially, without another process changing workflow registration.
@@ -235,9 +236,13 @@ Customers, orders, policy/inventory services, replacement receipts, the review c
 
 Java enforces the fixture's customer/order identity, replacement eligibility, trusted price threshold and required approval. Interpreting whether free-form customer text describes damage is still the model's job; this example does not deterministically verify that claim. The HTTP endpoints use a fixed demo customer and unauthenticated reviewer simulator. Keep the stack on localhost; it is not a production customer or reviewer authentication system.
 
+`SEND_INFO` requires a nonblank `answer` string of at most 4000 characters in the model proposal. Java persists it before marking the information outcome; the shopper page displays it as plain text. A missing or malformed answer escalates. This is an answer on the tracking page, with no email or external delivery implied.
+
+A replacement receipt remains valid if the native delivery wait fails. The carrier outbox continues publishing that simulated delivery fact, records `lateDelivery` and retains `ESCALATED` plus `followUpRequired`; it does not reopen the workflow, declare success or issue another replacement. Replay republishes only acknowledged request and carrier facts, so replaying a pending request cannot manufacture a delivery event.
+
 Stable request IDs and persisted receipts deduplicate this demo's replacement effect. An outbox publication can replay after a crash between Kafka acknowledgement and saving its local marker. Arbitrary external APIs need their own idempotency strategy.
 
-The scenarios above have passed on a clean, isolated Compose installation using the default Anthropic configuration, including real model calls and all three MCP reads. The standalone engine has also exhibited intermittent Kafka transaction failures; its bounded supervisor can restart it after sustained readiness loss, but the initiating failure remains unresolved. These results do not establish production availability or recovery guarantees.
+The original seven scenarios passed on a clean, isolated Compose installation at the published baseline, including real Anthropic calls and all three MCP reads. The added information-answer, active-replay and late-follow-up acceptance checks require a fresh rehearsal on the updated stack. Local regression tests alone do not establish those live results. The standalone engine has also exhibited intermittent Kafka transaction failures; its bounded supervisor can restart it after sustained readiness loss, but the initiating failure remains unresolved. These results do not establish production availability or recovery guarantees.
 
 ## Development
 

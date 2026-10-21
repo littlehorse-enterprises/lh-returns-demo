@@ -14,6 +14,14 @@ Use the $299 Sith saber. The higher trusted order value requires review even if 
 
 Keep business events distinct from engine progress: a task finishing is not a delivery confirmation.
 
+## An answer without a replacement
+
+Choose **Ask about this order**, ask its price or replacement eligibility, and submit. The agent must return an actual answer based on the tool facts. Show the text on the tracking page, the stored `customerAnswer` and the native information branch with no replacement receipt. Run `./scripts/demo.sh information` against the updated live stack before including this in a recording.
+
+## Late delivery after a failed wait
+
+The timeout scenario first shows an escalated request and a failed native run. When the carrier resumes, the tracking page records simulated delivery confirmation while preserving the follow-up requirement, failed native outcome and original receipt. Explain that evidence arriving later does not automatically resolve the failed business process.
+
 ## The failure worth showing
 
 Run `./scripts/demo.sh recovery`. The worker persists its replacement receipt, pauses before acknowledgement and is killed. After restart, LittleHorse retries the task, which reuses the receipt. The independently running carrier supplies the correlated delivery event.

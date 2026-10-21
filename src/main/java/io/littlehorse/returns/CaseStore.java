@@ -153,6 +153,18 @@ public final class CaseStore {
         .add(Map.of("at", Instant.now().toString(), "type", type, "message", message));
   }
 
+  /** Preserve late carrier evidence without rewriting a failed workflow's business outcome. */
+  public static void recordLateDelivery(Map<String, Object> c) {
+    if ("ESCALATED".equals(c.get("status")) && c.get("replacement") != null
+        && Boolean.TRUE.equals(c.get("carrierPublished")) && c.get("lateDelivery") == null) {
+      c.put("followUpRequired", true);
+      c.put("lateDelivery", Map.of("delivered", true, "simulated", true,
+          "eventId", c.get("carrierEventId")));
+      event(c, "LATE_DELIVERY_RECORDED",
+          "Simulated carrier confirmation recorded for an escalated request; follow-up remains required.");
+    }
+  }
+
   public static final class RequestConflict extends IllegalArgumentException {
     public RequestConflict(String message) { super(message); }
   }

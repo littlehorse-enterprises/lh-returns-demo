@@ -100,13 +100,20 @@ public final class ReturnsHttpServer implements AutoCloseable {
           return;
         }
         if (tail.equals(id + "/replay") && method.equals("POST")) {
-          if (!"DELIVERED".equals(c.get("status"))) throw new Conflict("Replay requires a delivered demo case");
-          // Deliberately replay only this stored synthetic case, never arbitrary topic/payload input.
+          if (!Boolean.TRUE.equals(c.get("requestPublished")))
+            throw new Conflict("Replay requires an acknowledged customer request");
+          // Replay recorded facts only: an active request must not fabricate delivery.
+          Set<String> topics = new LinkedHashSet<>();
+          topics.add("customer-requests");
+          if (Boolean.TRUE.equals(c.get("carrierPublished"))) topics.add("fulfillment-events");
           for (int i = 0; i < 2; i++) {
             publishRequest(c);
-            publisher.publish("fulfillment-events", id, "true");
+            if (topics.contains("fulfillment-events")) publisher.publish("fulfillment-events", id, "true");
           }
-          json(x, 200, Map.of("requestId", id, "recordsPerTopic", 2, "simulated", true, "targetOffsets", publisher.acknowledgedOffsets()));
+          Map<String, Long> offsets = new LinkedHashMap<>(publisher.acknowledgedOffsets());
+          offsets.keySet().retainAll(topics);
+          json(x, 200, Map.of("requestId", id, "recordsPerTopic", 2, "simulated", true,
+              "topics", topics, "targetOffsets", offsets));
           return;
         }
         if (tail.equals(id + "/review") && method.equals("POST")) {

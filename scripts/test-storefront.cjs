@@ -137,3 +137,84 @@ test('Dashboard and workflow links clear unsafe or stale destinations', async ()
     assert.equal(ui.element('workflow-link').href, undefined);
   }
 });
+
+
+test('information-only resolution displays the actual customer answer as plain text', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../src/main/resources/shop/index.html'), 'utf8');
+  // The fake DOM creates IDs on demand, so separately require real page anchors.
+  assert.match(html, /id=[\"']answer-panel[\"']/);
+  assert.match(html, /id=[\"']customer-answer[\"']/);
+  const ui = storefront();
+  const customerAnswer = 'Your warranty covers the damaged hilt. <img src=x onerror=alert(1)> & keep your receipt.';
+  // An answer must never reach an HTML sink, even when it resembles markup.
+  Object.defineProperty(ui.element('customer-answer'), 'innerHTML', {
+    get() { return ''; },
+    set() { assert.fail('Customer answers must be rendered with textContent'); }
+  });
+  assert.equal(ui.render({status: 'INFORMATION_SENT', customerAnswer,
+    lhAvailable: true, lhStatus: 'COMPLETED'}), true);
+  assert.equal(ui.element('answer-panel').hidden, false);
+  assert.equal(ui.element('customer-answer').textContent, customerAnswer);
+  assert.equal(ui.element('progress').hidden, true);
+  assert.doesNotMatch(ui.element('tracking-title').textContent, /replacement.*(?:arrived|delivered)/i);
+});
+
+test('historical information-only records without an answer require follow-up', () => {
+  for (const customerAnswer of [undefined, null, '', '   ', '\n\t']) {
+    const ui = storefront();
+    ui.render({status: 'INFORMATION_SENT', customerAnswer, lhAvailable: true, lhStatus: 'COMPLETED'});
+    const message = ui.element('tracking-title').textContent + ' ' + ui.element('tracking-copy').textContent;
+    assert.match(message, /follow[ -]?up|closer look/i);
+    assert.doesNotMatch(message, /(?:has been|was|is) (?:answered|resolved)|request is complete/i);
+    assert.equal(ui.element('answer-panel').hidden, true);
+    assert.equal(ui.element('progress').hidden, true);
+  }
+});
+
+test('answer content is cleared when another case has no customer answer', () => {
+  const ui = storefront();
+  ui.render({status: 'INFORMATION_SENT', customerAnswer: 'Keep your receipt for warranty support.'});
+  ui.render({status: 'INFORMATION_SENT', customerAnswer: '   '});
+  assert.equal(ui.element('answer-panel').hidden, true);
+  assert.equal(ui.element('customer-answer').textContent, '');
+  ui.render({status: 'WAITING_DELIVERY', replacement: {receiptId: 'replacement-fixture', effectCount: 1}});
+  assert.equal(ui.element('answer-panel').hidden, true);
+});
+
+test('late carrier confirmation retains the follow-up outcome and failed native evidence', () => {
+  const ui = storefront();
+  const lateCase = {status: 'ESCALATED', followUpRequired: true, carrierPublished: true,
+    replacement: {receiptId: 'replacement-fixture', effectCount: 1},
+    lateDelivery: {delivered: true, simulated: true, eventId: 'carrier-late-fixture'},
+    lhAvailable: true, lhStatus: 'EXCEPTION'};
+  assert.equal(ui.render(lateCase), true);
+  assert.match(ui.element('tracking-title').textContent, /follow[ -]?up|closer look/i);
+  assert.doesNotMatch(ui.element('tracking-title').textContent, /resolved|complete|has arrived/i);
+  assert.match(ui.element('tracking-copy').textContent, /deliver(?:y|ed).*confirm|confirm.*deliver(?:y|ed)/i);
+  assert.match(ui.element('tracking-copy').textContent, /follow[ -]?up/i);
+  assert.doesNotMatch(ui.element('tracking-copy').textContent, /delivery is not confirmed|another replacement|new replacement/i);
+  assert.match(ui.element('evidence-delivery').textContent, /late|after/i);
+  assert.match(ui.element('evidence-delivery').textContent, /simulat/i);
+  assert.equal(ui.element('evidence-native').textContent, 'EXCEPTION');
+  assert.equal(ui.element('evidence-effect').textContent, 'replacement-fixture · 1 effect');
+  assert.equal(ui.element('progress').hidden, true);
+  assert.equal(lateCase.status, 'ESCALATED');
+  assert.equal(lateCase.followUpRequired, true);
+});
+
+test('an escalated replacement keeps polling for late carrier evidence after native failure', () => {
+  const ui = storefront();
+  const pending = {status: 'ESCALATED', followUpRequired: true,
+    replacement: {receiptId: 'replacement-fixture', effectCount: 1},
+    carrierPublished: false, lhAvailable: true, lhStatus: 'EXCEPTION'};
+  assert.equal(ui.render(pending), false);
+  assert.equal(ui.render({...pending, followUpRequired: undefined}), false, 'Historical pending outbox must continue polling');
+  assert.equal(ui.render({...pending, carrierPublished: true, followUpRequired: undefined}), false, 'Historical acknowledgement awaits reconciled follow-up evidence');
+  // Kafka acknowledgement alone is not the eventual recorded delivery fact.
+  assert.equal(ui.render({...pending, carrierPublished: true}), false);
+  const confirmed = {...pending, carrierPublished: true,
+    lateDelivery: {delivered: true, simulated: true, eventId: 'carrier-late-fixture'}};
+  assert.equal(ui.render({...confirmed, lhStatus: 'RUNNING'}), false);
+  assert.equal(ui.render({...confirmed, lhAvailable: false}), false);
+  assert.equal(ui.render(confirmed), true);
+});

@@ -91,6 +91,7 @@ public final class ReturnsTasks {
         c -> {
           requireValidated(c);
           String action = "INVALID", reason = "Unsupported or malformed model proposal";
+          c.remove("customerAnswer");
           try {
             JsonNode node =
                 CaseStore.JSON.reader()
@@ -105,6 +106,15 @@ public final class ReturnsTasks {
               if (Set.of("REPLACE", "ESCALATE", "SEND_INFO").contains(candidate)) {
                 action = candidate;
                 reason = node.get("reason").asText();
+                if ("SEND_INFO".equals(action)) {
+                  JsonNode answer = node.path("answer");
+                  if (answer.isTextual() && !answer.asText().isBlank() && answer.asText().length() <= 4000)
+                    c.put("customerAnswer", answer.asText().strip());
+                  else {
+                    action = "ESCALATE";
+                    reason = "Information proposal has no valid customer answer; follow-up required.";
+                  }
+                }
               }
             }
           } catch (Exception ignored) {
@@ -215,6 +225,9 @@ public final class ReturnsTasks {
         id,
         c -> {
           requireValidated(c);
+          if ("INFORMATION_SENT".equals(outcome)
+              && (!(c.get("customerAnswer") instanceof String answer) || answer.isBlank()))
+            throw new IllegalStateException("No customer answer recorded");
           if ("DELIVERED".equals(outcome) && c.get("replacement") == null)
             throw new IllegalStateException("No replacement receipt");
           if (!outcome.equals(c.get("status"))) {
@@ -228,7 +241,7 @@ public final class ReturnsTasks {
                 "DELIVERED".equals(outcome) ? "DELIVERED" : "INFORMATION_SENT",
                 "DELIVERED".equals(outcome)
                     ? "Correlated carrier delivery confirmed; resolution complete."
-                    : "Information-only resolution recorded; no replacement created.");
+                    : "Customer answer available on the tracking page; no external delivery claimed.");
           }
           return c;
         });
@@ -255,6 +268,10 @@ public final class ReturnsTasks {
             c.put("requestId", id);
           }
           c.put("status", state);
+          if ("ESCALATED".equals(state) && c.get("replacement") != null) {
+            c.put("followUpRequired", true);
+            CaseStore.recordLateDelivery(c);
+          }
           CaseStore.event(c, state, reason);
           return c;
         });

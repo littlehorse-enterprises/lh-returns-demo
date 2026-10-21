@@ -60,6 +60,7 @@ $('orders').addEventListener('click', event => {
   if (!button) return;
   selectedOrder = orders.find(o => o.orderId === button.dataset.order);
   $('exchange-form').reset();
+  updateResolution();
   $('form-error').hidden = true;
   $('form-item').textContent = selectedOrder.item;
   $('form-order').textContent = `Order #${orderNumber(selectedOrder)} · ${money(selectedOrder.price)}`;
@@ -80,13 +81,24 @@ window.addEventListener('beforeunload', event => {
   if (dialog.open && !submitting && ($('message').value.trim() || $('reason').value)) event.preventDefault();
 });
 
+function updateResolution() {
+  const information = $('info-resolution').checked === true;
+  $('reason').required = !information;
+  $('reason').disabled = information;
+  $('message').required = information;
+  $('submit-exchange').textContent = information ? 'Ask about this order ↗' : 'Request replacement ↗';
+}
+$('exchange-form').addEventListener('change', updateResolution);
+
 $('exchange-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (submitting) return;
   const reason = $('reason').value;
-  if (!reason) { $('reason').reportValidity(); return; }
+  const information = $('info-resolution').checked === true;
+  if (information && !$('message').value.trim()) { $('message').reportValidity(); return; }
+  if (!information && !reason) { $('reason').reportValidity(); return; }
   const descriptions = {damaged: 'arrived damaged in transit', 'not-working': 'will not ignite or work as expected', 'wrong-color': 'arrived with the wrong blade color', sand: 'arrived damaged with sand jammed in the hilt', other: 'needs support'};
-  const message = `My ${selectedOrder.item} ${descriptions[reason]}. Please send a replacement. ${$('message').value.trim()}`;
+  const message = information ? `Question about my ${selectedOrder.item} order: ${$('message').value.trim()}` : `My ${selectedOrder.item} ${descriptions[reason]}. Please send a replacement. ${$('message').value.trim()}`;
   const scenario = /299$/.test(selectedOrder.orderId) ? 'review' : 'normal';
   // Retrying an uncertain response reuses the same business identity and payload.
   if (!submission || submission.message !== message || submission.scenario !== scenario) {
@@ -117,7 +129,7 @@ $('exchange-form').addEventListener('submit', async event => {
     $('submit-exchange').disabled = false;
     $('close-dialog').disabled = false;
     $('cancel-exchange').disabled = false;
-    $('submit-exchange').textContent = 'Request replacement ↗';
+    updateResolution();
   }
 });
 
@@ -126,6 +138,9 @@ function showTracking(c) {
   $('orders-view').hidden = true; $('tracking-view').hidden = false;
   const delivered = c.status === 'DELIVERED' && c.delivery?.delivered === true;
   const replaced = Boolean(c.replacement);
+  const answer = c.status === 'INFORMATION_SENT' && typeof c.customerAnswer === 'string' ? c.customerAnswer.trim() : '';
+  const late = c.status === 'ESCALATED' && c.lateDelivery?.delivered === true;
+  $('answer-panel').hidden = !answer; $('customer-answer').textContent = answer;
   const closed = ['REJECTED', 'ESCALATED', 'INFORMATION_SENT', 'INGRESS_FAILED'].includes(c.status);
   let title = 'We’ve received your request', copy = 'We’re checking your order and the details you shared. You can return to this page for updates.';
   if (c.status === 'WAITING_REVIEW' || c.status === 'REVIEW_SIGNALLED') {title = 'Your request is with our team'; copy = 'Your exchange needs a little extra review. There’s nothing else you need to do right now.';}
@@ -133,7 +148,8 @@ function showTracking(c) {
   if (delivered) {title = 'Your replacement has arrived'; copy = 'Delivery is confirmed. Your replacement is ready for its next adventure.';}
   if (c.status === 'REJECTED') {title = 'Your exchange wasn’t approved'; copy = 'Your request was reviewed and closed. No replacement was issued.';}
   if (c.status === 'ESCALATED') {title = 'Your request needs a closer look'; copy = replaced ? 'A replacement receipt is on file, but the request needs follow-up. Delivery is not confirmed.' : 'We couldn’t complete your exchange automatically. Your request has been saved for follow-up.';}
-  if (c.status === 'INFORMATION_SENT') {title = 'Your request has been answered'; copy = 'This request was resolved with information. No replacement was arranged.';}
+  if (late) copy = 'The simulated carrier confirmed delivery. Your request still needs follow-up; the workflow outcome is unchanged.';
+  if (c.status === 'INFORMATION_SENT') {title = answer ? 'Here’s what we found' : 'Your request needs a closer look'; copy = answer ? 'Your answer is available below. No replacement was arranged.' : 'No answer was recorded. Your saved request needs follow-up.';}
   if (c.status === 'INGRESS_FAILED') {title = 'Your request couldn’t be sent'; copy = 'Your request is saved, but Kafka acknowledgement wasn’t confirmed. Keep this request’s link while we check it.';}
   $('tracking-title').textContent = title; $('tracking-copy').textContent = copy;
   $('status-icon').textContent = delivered ? '✓' : closed ? '!' : '↺';
@@ -158,13 +174,14 @@ function showTracking(c) {
   $('evidence-tools').textContent = reads.length ? reads.join(' · ') : 'No tool reads recorded yet';
   $('evidence-policy').textContent = c.policy === 'AUTO' ? 'Java policy · automatic replacement' : c.policy === 'REVIEW' ? (c.reviewApproved === true ? 'Java policy · reviewer approved' : c.reviewApproved === false ? 'Java policy · reviewer declined' : 'Java policy · waiting for review') : c.policy || 'Not evaluated';
   $('evidence-effect').textContent = c.replacement ? `${c.replacement.receiptId || 'Receipt recorded'} · ${c.replacement.effectCount} effect` : 'No replacement receipt';
-  $('evidence-delivery').textContent = delivered ? 'Correlated delivery confirmed' : c.carrierPublished ? 'fulfillment-events · Kafka acknowledged' : 'No delivery event acknowledged';
+  $('evidence-delivery').textContent = late ? 'Late follow-up: simulated carrier delivery confirmed' : delivered ? 'Correlated delivery confirmed' : c.carrierPublished ? 'fulfillment-events · Kafka acknowledged' : 'No delivery event acknowledged';
   $('evidence-native').textContent = c.lhAvailable === true ? c.lhStatus : 'Unavailable · business state retained';
   if (lastAnnouncement !== title) { $('announcer').textContent = title; lastAnnouncement = title; }
   document.title = `${title} · Outer Rim Outfitters`;
   // Business delivery can precede the final worker acknowledgement in LittleHorse.
   const nativeTerminal = c.lhAvailable === true && ['COMPLETED', 'ERROR', 'EXCEPTION', 'TERMINATED'].includes(c.lhStatus);
-  return c.status === 'INGRESS_FAILED' || ((delivered || closed) && nativeTerminal);
+  const pendingFollowUp = c.status === 'ESCALATED' && replaced && (c.followUpRequired === true || typeof c.carrierPublished === 'boolean') && !late;
+  return c.status === 'INGRESS_FAILED' || ((delivered || closed) && nativeTerminal && !pendingFollowUp);
 }
 
 function schedulePoll() { clearTimeout(timer); if (requestId) timer = setTimeout(refreshStatus, 4000); }

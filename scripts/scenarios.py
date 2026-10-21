@@ -90,11 +90,46 @@ def normal():
     return delivered(start("normal"))
 
 
+def information():
+    created = api("/api/requests", "POST", {"scenario": "normal",
+        "message": "What is the price of my Jedi Training Lightsaber order, and is it replacement eligible? I only need information."}, expected=201)
+    case_id = created["requestId"]
+    case = wait_for(case_id, "recorded customer answer and native completion",
+                    lambda c: c["status"] == "INFORMATION_SENT" and c.get("lhStatus") == "COMPLETED")
+    assert case.get("decision") == "SEND_INFO" and case.get("policy") == "INFO", case
+    assert isinstance(case.get("customerAnswer"), str) and case["customerAnswer"].strip(), case
+    assert len(case["customerAnswer"]) <= 4000 and "49" in case["customerAnswer"], case
+    assert not case.get("replacement") and not case.get("carrierPublished"), case
+    reads = {read.get("name", read.get("tool")) if isinstance(read, dict) else read
+             for read in case.get("toolReads", [])}
+    assert {"get_order", "get_policy", "get_fulfillment_options"} <= reads, case
+    print(f"PASS information {case_id}: actual answer stored, no replacement, native COMPLETED", flush=True)
+    return case
+
+
+def replay_recorded(case):
+    replay = api(f"/api/cases/{case['requestId']}/replay", "POST", {})
+    targets = replay.get("targetOffsets", {})
+    expected = {"customer-requests", "fulfillment-events"} if case.get("carrierPublished") else {"customer-requests"}
+    assert set(targets) == expected, replay
+    for topic in expected:
+        deadline = time.monotonic() + 150
+        while time.monotonic() < deadline:
+            if connect_offsets("returns-" + topic).get(0, -1) >= targets[topic]:
+                break
+            time.sleep(2)
+        else:
+            raise AssertionError(f"Replay not committed by returns-{topic}: target={targets}")
+    return api(f"/api/cases/{case['requestId']}")
+
+
 def review(approved):
     case_id = start("review")
     pending = wait_for(case_id, "policy review gate", lambda c: c["status"] == "WAITING_REVIEW")
     assert pending.get("policy") == "REVIEW" and not pending.get("replacement"), pending
     assert pending.get("lhAvailable") is True and pending.get("lhStatus") == "RUNNING", pending
+    replayed = replay_recorded(pending)
+    assert replayed["status"] == "WAITING_REVIEW" and not replayed.get("replacement"), replayed
     api(f"/api/cases/{case_id}/review", "POST", {"approved": approved})
     if approved:
         result = delivered(case_id)
@@ -171,6 +206,9 @@ def carrier_restart():
         stopped = api(f"/api/cases/{case_id}")
         assert not stopped.get("carrierPublished") and not stopped.get("delivery"), "Carrier completed before the restart window"
         assert stopped["replacement"] == pending["replacement"], stopped
+        replayed = replay_recorded(stopped)
+        assert replayed["status"] == "WAITING_DELIVERY" and not replayed.get("delivery"), replayed
+        assert replayed["replacement"] == pending["replacement"], replayed
     finally:
         subprocess.run(COMPOSE + ["start", "carrier"], check=True, timeout=90)
     case = delivered(case_id)
@@ -201,12 +239,19 @@ def timeouts():
         assert carrier_case["replacement"]["effectCount"] == 1 and not carrier_case.get("delivery"), carrier_case
         result.append(carrier_case)
         print("PASS review and carrier deadlines: native failed runs, no unauthorized or repeated effect", flush=True)
-        return result
     finally:
         try:
             subprocess.run(COMPOSE + ["start", "carrier"], check=True, timeout=90)
         finally:
             register(int(os.getenv("WAIT_TIMEOUT_SECONDS", "300")))
+    late = wait_for(carrier_case["requestId"], "late carrier follow-up",
+                    lambda c: bool(c.get("lateDelivery")), terminal_ok=True)
+    assert late["status"] == "ESCALATED" and late.get("followUpRequired") is True, late
+    assert late.get("lhStatus") in {"ERROR", "EXCEPTION"} and not late.get("delivery"), late
+    assert late["replacement"] == carrier_case["replacement"], late
+    result[-1] = late
+    print("PASS late delivery: carrier fact recorded, failed native outcome retained, one receipt", flush=True)
+    return result
 
 
 def main():
@@ -215,15 +260,16 @@ def main():
     result = []
     if scenario == "all":
         first = normal()
-        result = [first, review(True), review(False), recovery(), duplicates(first), carrier_restart(), *timeouts()]
+        result = [first, information(), review(True), review(False), recovery(), duplicates(first), carrier_restart(), *timeouts()]
     elif scenario == "normal": result = [normal()]
+    elif scenario == "information": result = [information()]
     elif scenario == "review": result = [review(True)]
     elif scenario == "rejection": result = [review(False)]
     elif scenario == "recovery": result = [recovery()]
     elif scenario == "duplicates": result = [duplicates()]
     elif scenario == "carrier-restart": result = [carrier_restart()]
     elif scenario == "timeouts": result = timeouts()
-    else: raise ValueError("Choose all, normal, review, rejection, recovery, duplicates, carrier-restart or timeouts")
+    else: raise ValueError("Choose all, normal, information, review, rejection, recovery, duplicates, carrier-restart or timeouts")
     print(json.dumps({"result": "PASS", "cases": [{"requestId": case["requestId"], "status": case["status"], "lhStatus": case.get("lhStatus")} for case in result]}, indent=2))
 
 if __name__ == "__main__":
